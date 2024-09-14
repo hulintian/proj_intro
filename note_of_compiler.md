@@ -925,3 +925,62 @@ namespace kale {
 
 ### LLVM IR代码生成
 * 这里与llvm关系最大
+* 使用LLVM的IRBuilder来创建LLVM的ir
+
+* 函数的llvm ir生成：
+  * codegen是一个纯虚函数，每个子类都要实现
+  * 通过调用顶层（root AST node）的codegen方法，然后往下层层调用codegen方法直到到达叶子节点（类似于DFS遍历），遍历完整个AST后也就生成了一段完整的llvm ir。
+```cpp
+Function *FunctionAST::codegen() {
+  // 在module里看看这个函数原型是否已经存在同名函数了
+  Function *TheFunction = TheModule->getFunction(Proto->getName());
+  // 函数原型的代码生成，TheFunction为空的话就表示有同名的函数，即函数名没有重复，然后就调用函数原型的codegen来生成ir
+  if(!TheFunction) {
+    TheFunction = Proto->codegen();
+  }
+  // 调用晚Proto-->codegen()，ThFunction仍然为空，这表明在Proto->codegen()的过程中有地方报错了，直接返回nullptr
+  if(!TheFunction) {
+    return nullptr;
+  }
+  // 
+  if(!TheFunction->empty()) {
+    return (Function*)LogErrorV("Function cannot be redefined.");
+  }
+
+  BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
+  Builder->SetInsertPoint(BB);
+
+  NamedValues.clear();
+  for(auto &Arg : TheFunction->args()) 
+    NamedValues[std::string(Arg.getName())] = &Arg; 
+
+  if(Value *RetVal = Body->codegen()) {
+    Builder->CreateRet(RetVal);
+
+    // Validate the generated code , checking for consistency
+    verifyFunction(*TheFunction);
+
+    // Run the optimizer on the function .
+    TheFPM->run(*TheFunction, *TheFAM);
+
+    return TheFunction;
+  }
+
+  TheFunction->eraseFromParent();
+  return nullptr;
+}
+
+```
+
+* codegen.h:
+```cpp
+#ifndef __CODEGEN_H__
+#define __CODEGEN_H__
+
+void HandleTopLevelExpression();        // 处理顶层表达式
+void HandleExtern();                    // 处理extern，外部的符号
+void HandleDefinition();                // 处理函数定义
+void InitializeModuleAndManagers();     // 初始化LLVM的一些全局变量，如LLVMContext， TheModule，Builder
+
+#endif 
+```
