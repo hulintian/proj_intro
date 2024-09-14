@@ -512,7 +512,58 @@ class ExtractHandler : public ast_matchers::MatchFinder::MatchCallback
     ```
 
 * 此外我自己对Graphviz提供对函数做了一些包装，使我在ExtractHandler上用得更简单一点
+* the code :
+```cpp
+/// 将graph保存到dot文件
+void write_to_dot(std::string graph_name, Agraph_t* graph){
+    FILE *fp;
+    fp = fopen((char*)graph_name.c_str(), "w");
 
+    if(fp != NULL) {
+        agwrite(graph, fp);
+        fclose(fp);
+    }else {
+        llvm::errs() << "Can't open file " << graph_name << "\n" ;
+        return ;
+    }
+    std::cout << "保存到 : " <<  graph_name << "\n" ;
+}
+
+// 将图用dot渲染成png
+void to_png(GVC_t* gvc, Agraph_t* g, std::string pathAname) {
+    gvLayout(gvc, g, "dot");
+    gvRenderFilename(gvc, g, "png",(char*)pathAname.c_str());
+    std::cout << "Render image and save it at : " << pathAname << "\n";
+}
+
+/// draw a edge from A to B
+void draw_edge(Agraph_t* g, Agnode_t* A, Agnode_t* B, std::string edge_name, std::string label) {
+//没想好
+    if(A == NULL || B == NULL) {
+        llvm::errs() << "Node A or B is a NULL pointer" << "\n";
+        return ;
+    } else {
+        // create the edge
+        Agedge_t* edge = agedge(g, A,B, (char*)edge_name.c_str(), 1);
+        // set the label
+        agsafeset(edge, (char*)"label", (char*)label.c_str(), (char*)"");
+    }
+}
+
+/// free resources when end 
+void free_graph_Contex(GVC_t* gvc, Agraph_t* g) {
+    gvFreeLayout(gvc, g);
+    agclose(g);
+    gvFreeContext(gvc);
+}
+
+Agnode_t* set_node(Agraph_t* g,std::string name, std::string label) {
+    Agnode_t* node = agnode( g, (char*)name.c_str(), 1);
+    agsafeset(node, (char*)"label", (char *)label.c_str(), NULL);
+
+    return node;
+}
+```
 ### 结果
 * src
     ```cpp
